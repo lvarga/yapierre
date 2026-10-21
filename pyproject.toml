@@ -1,0 +1,48 @@
+[project]
+name = "yapierre"
+version = "0.1.0"
+description = "A command-line text-to-speech tool with pluggable AI engines, style instructions and voice effects."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.13"
+keywords = ["tts", "text-to-speech", "speech", "cli", "qwen", "voice"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "numpy",
+    "soundfile",
+]
+
+[project.optional-dependencies]
+qwen = [
+    "qwen-tts>=0.1.1",
+    "huggingface_hub[hf_xet]",
+    "torch",
+    "torchaudio",
+]
+
+[project.scripts]
+yapierre = "yapierre.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/yapierre"]
+
+# uv: pull CUDA-enabled PyTorch on Windows/Linux. Needs an NVIDIA driver >= 580.
+# Swap "pytorch-cu130" for "pytorch-cu126" on older drivers.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+torchaudio = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Downloaded models and generated audio
+models/
+samples/
+*.wav
+*.mp3
+*.ogg
+*.flac
+
+# Local config
+yapierre.toml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
