@@ -87,9 +87,26 @@ class QwenEngine(Engine):
             dtype_name = "float32"  # half precision on CPU is slow or unsupported
         return device, getattr(torch, dtype_name)
 
+    def _unload_oldest(self) -> None:
+        import gc
+
+        import torch
+
+        kind = next(iter(self._models))
+        del self._models[kind]
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if self.verbose:
+            print(f"yapierre: unloaded {self.settings['models'][kind]} to free memory")
+
     def _model(self, kind: str):
         if kind in self._models:
+            self._models[kind] = self._models.pop(kind)  # mark as most recently used
             return self._models[kind]
+        # Each 1.7B model needs ~4.5 GB of VRAM; by default keep only one loaded at a time.
+        while self._models and len(self._models) >= max(1, int(self.settings.get("max_loaded_models", 1))):
+            self._unload_oldest()
         repo = self.settings["models"][kind]
         if not os.path.isdir(repo):
             from huggingface_hub import snapshot_download, try_to_load_from_cache
@@ -120,6 +137,13 @@ class QwenEngine(Engine):
 
     # --- Engine API ----------------------------------------------------------------
 
+    def model_key(self, request: SynthesisRequest) -> str:
+        if request.ref_audio:
+            return "clone"
+        if request.speaker:
+            return "custom"
+        return "design"
+
     def languages(self) -> list[str]:
         ids = self._config_json("design")["talker_config"]["codec_language_id"]
         return ["auto"] + sorted(k for k in ids if "dialect" not in k)
@@ -143,7 +167,8 @@ class QwenEngine(Engine):
         language = self.resolve_language(request.language)
         language = "Auto" if language == "auto" else language.capitalize()
 
-        if request.ref_audio:
+        kind = self.model_key(request)
+        if kind == "clone":
             if request.style or request.voice:
                 print("yapierre: note: --style/--voice are ignored when cloning a voice (--ref-audio).")
             model = self._model("clone")
@@ -153,7 +178,7 @@ class QwenEngine(Engine):
             else:
                 clone_args["x_vector_only_mode"] = True
             wavs, sr = model.generate_voice_clone(text=request.text, language=language, **clone_args, **gen)
-        elif request.speaker:
+        elif kind == "custom":
             model = self._model("custom")
             if request.voice:
                 print("yapierre: note: --voice is ignored when a preset --speaker is used.")

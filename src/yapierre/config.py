@@ -29,6 +29,8 @@ DEFAULTS: dict[str, Any] = {
     "engines": {
         "qwen": {
             "dtype": "bfloat16",
+            # Models kept in memory at once in batch/interactive mode (~4.5 GB VRAM each).
+            "max_loaded_models": 1,
             # Used when neither --voice, --speaker nor --ref-audio is given.
             "default_voice": "A clear, natural, friendly adult voice.",
             "models": {
@@ -58,6 +60,7 @@ max_chunk_chars = 400
 
 [engines.qwen]
 dtype = "bfloat16"         # bfloat16, float16, float32 (use float32 on CPU)
+max_loaded_models = 1      # models kept in memory in batch/interactive mode (~4.5 GB VRAM each)
 default_voice = "A clear, natural, friendly adult voice."
 
 [engines.qwen.models]

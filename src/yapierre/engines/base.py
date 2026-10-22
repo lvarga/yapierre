@@ -43,6 +43,10 @@ class Engine(ABC):
     def synthesize(self, request: SynthesisRequest) -> tuple[np.ndarray, int]:
         """Return (mono float32 waveform, sample rate)."""
 
+    def model_key(self, request: SynthesisRequest) -> str:
+        """Which model a request needs. Batch mode groups jobs by this to avoid reloading models."""
+        return ""
+
     def languages(self) -> list[str]:
         return []
 

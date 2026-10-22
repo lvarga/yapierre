@@ -15,6 +15,7 @@ yapierre "I am your new overlord. Resistance is futile." --style "make it sound 
 - **Preset speakers** and **voice cloning** from a short recording
 - **Audio effects** like robot, radio, telephone, cave, chipmunk, giant, alien and underwater, plus your own ffmpeg filters
 - **Pluggable engines**: ships with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS); more engines can be added
+- **Batch and interactive modes** that load the model once for many jobs
 - Output to WAV, MP3, OGG or FLAC; reads text from arguments, files or stdin; handles long texts
 
 ## Requirements
@@ -109,6 +110,46 @@ produces human voices. Turn that off with `--no-auto-effects` or `auto_effects =
 | `giant` | Very deep, monstrous voice |
 | `alien` | Warbling sci-fi alien |
 | `underwater` | Muffled and wobbly |
+
+### Many jobs at once: batch and interactive mode
+
+Loading a model takes 15-90 seconds, while generating a sentence takes a few. To make many clips,
+run them in one session so the model loads only once.
+
+**Batch mode** runs one job per line of a text file. Each line takes the same options as the command
+line, without the `yapierre` part ([example](examples/jobs.txt)):
+
+```text
+# jobs.txt: lines starting with # are comments
+"Welcome to the show!" --speaker Ryan -s excited -o intro.wav
+"Bienvenue à l'émission !" -l fr --voice "a calm female narrator" -o intro_fr.mp3
+"Resistance is futile." -s "sound like a robot" -o robot.wav
+```
+
+```bash
+yapierre --batch jobs.txt
+yapierre --batch jobs.txt -l de -e radio    # options here are defaults for every line
+```
+
+- Blank lines and lines starting with `#` are skipped.
+- Lines without `-o` get an automatic name like `yapierre_<timestamp>.wav`.
+- Relative paths (`-o`, `-f`, `--ref-audio`) are resolved from the folder you run yapierre in.
+- All lines are checked before anything is generated, and jobs that use the same model run back to back.
+- A failed job doesn't stop the batch; the summary at the end lists what failed.
+
+**Interactive mode** keeps the model loaded and waits for you to type jobs:
+
+```text
+$ yapierre --interactive
+yapierre> "Hello there" -s cheerful -o hi.wav
+yapierre> Guten Morgen -l de --speaker Ryan
+yapierre> quit
+```
+
+Quote text that contains `'` or `"`, or that starts with `-`. Options such as `--device` and `--config`
+can only be given when starting yapierre. By default only one model is kept in memory, so switching
+between `--voice`, `--speaker` and `--ref-audio` jobs reloads models. With enough VRAM, raise
+`max_loaded_models` in the config (each model needs about 4.5 GB).
 
 ## Configuration
 

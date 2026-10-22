@@ -1,0 +1,16 @@
+# Example batch file for: yapierre --batch examples/jobs.txt
+# One job per line, with the same options as the command line. Lines starting with # are skipped.
+# Options given next to --batch (e.g. -l de or -e radio) apply to every line.
+
+# Voice described in words (VoiceDesign model)
+"Welcome to the show! Tonight we have a very special guest." --voice "a charismatic late-night host" -o out/intro.wav
+"Once upon a time, in a land far away..." --voice "an old man with a warm, raspy voice" -s "slow and mysterious" -o out/story.mp3
+"Resistance is futile." -s "make it sound like a robot" -o out/robot.wav
+
+# Other languages
+"Guten Abend und herzlich willkommen!" -l de -o out/welcome_de.wav
+"Bienvenue à l'émission de ce soir !" -l fr --voice "a calm female narrator" -o out/welcome_fr.wav
+
+# Preset speakers (CustomVoice model); see: yapierre --list speakers
+"Breaking news: a cat has learned to talk." --speaker Ryan -s "very excited" -e radio -o out/news.wav
+"Please hold, your call is important to us." --speaker Vivian -e telephone -o out/hold.wav
