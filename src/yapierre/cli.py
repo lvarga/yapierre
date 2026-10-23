@@ -19,7 +19,7 @@ import soundfile as sf
 
 from . import __version__
 from .config import CONFIG_TEMPLATE, load_config, user_config_path
-from .effects import all_effects, detect_effects, process
+from .effects import all_effects, detect_effects, find_ffmpeg, process
 from .engines import ENGINES, Engine, SynthesisRequest, load_engine
 
 EXAMPLES = """\
@@ -71,6 +71,8 @@ def build_parser(cls: type[argparse.ArgumentParser] = argparse.ArgumentParser) -
     p.add_argument("--ref-text", help="transcript of --ref-audio (improves cloning quality)")
     p.add_argument("-e", "--effect", action="append", default=[], help="add an audio effect; repeatable (see --list effects)")
     p.add_argument("--no-auto-effects", action="store_true", help="don't pick effects from words in --style")
+    p.add_argument("--loudness", type=float, metavar="LUFS", help="normalize to this loudness (default: -16 LUFS)")
+    p.add_argument("--no-normalize", action="store_true", help="keep the model's original loudness")
     p.add_argument("--engine", choices=list(ENGINES), help="TTS engine")
     p.add_argument("--device", help="auto, cuda, cuda:0, cpu, mps")
     p.add_argument("--seed", type=int, help="random seed for repeatable results")
@@ -159,6 +161,8 @@ class Job:
     play: bool = False
     # Where the job came from, e.g. "line 3", for progress messages.
     label: str = ""
+    # Target loudness in LUFS, or None to leave the level as generated.
+    loudness: float | None = None
 
 
 @dataclass
@@ -178,6 +182,7 @@ class Session:
         self.effects = all_effects(config)
         self._engines: dict[str, Engine] = {}
         self._reserved: set[Path] = set()
+        self._warned_no_ffmpeg = False
 
     def engine(self, name: str) -> Engine:
         if name not in self._engines:
@@ -238,7 +243,26 @@ class Session:
             ref_text=args.ref_text,
         )
         output = Path(args.output) if args.output else self.default_output()
-        return Job(request, engine_name, chosen, output, args.seed, args.play, label)
+        return Job(request, engine_name, chosen, output, args.seed, args.play, label, self.target_loudness(args))
+
+    def target_loudness(self, args) -> float | None:
+        """Target loudness for a job: --no-normalize wins, then --loudness, then the config."""
+        if args.no_normalize:
+            return None
+        if args.loudness is not None:
+            target = args.loudness
+        elif self.config.get("normalize", True):
+            target = float(self.config.get("loudness", -16.0))
+        else:
+            return None
+        if not -70 <= target <= -5:
+            raise SystemExit(f"yapierre: --loudness {target} is out of range; use -70 to -5 LUFS (e.g. -16)")
+        if not find_ffmpeg():
+            if not self._warned_no_ffmpeg:
+                print("yapierre: note: ffmpeg not found, so loudness normalization is skipped.")
+                self._warned_no_ffmpeg = True
+            return None
+        return target
 
     def run(self, job: Job, raw_copy: Path | None = None) -> RunResult:
         """Generate the job's audio. `raw_copy`, if given, also receives the audio before effects."""
@@ -262,16 +286,21 @@ class Session:
         if raw_copy:
             sf.write(raw_copy, audio, sample_rate)
 
-        if job.effects or job.output.suffix.lower() not in (".wav", ".flac"):
+        if job.effects or job.loudness is not None or job.output.suffix.lower() not in (".wav", ".flac"):
             with tempfile.TemporaryDirectory() as tmp:
                 raw = Path(tmp) / "raw.wav"
                 sf.write(raw, audio, sample_rate)
-                process(raw, job.output, job.effects, self.effects, sample_rate)
+                process(
+                    raw, job.output, job.effects, self.effects, sample_rate,
+                    loudness=job.loudness, true_peak=float(self.config.get("true_peak", -1.5)),
+                )
         else:
             sf.write(job.output, audio, sample_rate)
 
         result = RunResult(job.output, len(audio) / sample_rate, time.time() - started, sample_rate)
         extra = f", effects: {', '.join(job.effects)}" if job.effects else ""
+        if job.loudness is not None:
+            extra += f", {job.loudness:g} LUFS"
         print(f"yapierre: saved {job.output} ({result.duration:.1f}s of audio in {result.elapsed:.1f}s{extra})")
         if job.play:
             play(job.output)

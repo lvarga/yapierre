@@ -7,6 +7,7 @@ polls for their progress. Effect previews only need ffmpeg, so they run immediat
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import hashlib
 import io
@@ -163,6 +164,7 @@ class App:
                 duration=round(result.duration, 2),
                 elapsed=round(result.elapsed, 1),
                 effects=job.effects,
+                loudness=job.loudness,
                 **meta,
             )
 
@@ -194,7 +196,27 @@ class App:
             ns.voice = (data.get("voice") or "").strip() or None
         seed = data.get("seed")
         ns.seed = int(seed) if seed not in (None, "") else None
+        self._apply_loudness(ns, data)
         return ns
+
+    @staticmethod
+    def _apply_loudness(ns, data: dict) -> None:
+        """Copy the page's normalize/loudness fields onto CLI-style options; missing means the config default."""
+        if data.get("normalize") is False:
+            ns.no_normalize = True
+        elif data.get("loudness") not in (None, ""):
+            try:
+                ns.loudness = float(data["loudness"])
+            except (TypeError, ValueError):
+                raise ApiError("Loudness must be a number, e.g. -16.") from None
+
+    def _target_loudness(self, data: dict) -> float | None:
+        ns = argparse.Namespace(no_normalize=False, loudness=None)
+        self._apply_loudness(ns, data)
+        try:
+            return self.session.target_loudness(ns)
+        except SystemExit as e:
+            raise ApiError(str(e.code).removeprefix("yapierre: ")) from None
 
     def _output_path(self, data: dict) -> Path:
         fmt = str(data.get("format") or self.session.config["output_format"]).lstrip(".").lower()
@@ -235,6 +257,8 @@ class App:
                 "format": self.session.config["output_format"],
                 "voice": qwen.get("default_voice", ""),
                 "auto_effects": self.session.config.get("auto_effects", True),
+                "normalize": bool(self.session.config.get("normalize", True)),
+                "loudness": float(self.session.config.get("loudness", -16.0)),
                 "output_dir": str(Path(self.session.config["output_dir"]).resolve()),
             },
             "ffmpeg": bool(find_ffmpeg()),
@@ -270,6 +294,7 @@ class App:
         if not (data.get("text") or "").strip():
             data["text"] = "Hello! This is what my voice sounds like."
         key_fields = {k: data.get(k) for k in ("mode", "speaker", "voice", "style", "language", "text", "engine")}
+        key_fields["loudness"] = self._target_loudness(data)
         key = hashlib.sha1(json.dumps(key_fields, sort_keys=True).encode()).hexdigest()[:16]
         path = self.preview_dir / f"{key}.wav"
         who = data.get("speaker") if data.get("mode") == "speaker" else (data.get("voice") or "default voice")
@@ -320,15 +345,20 @@ class App:
         if unknown:
             raise ApiError(f"Unknown effect(s): {', '.join(unknown)}")
         raw, sample_rate = source
+        loudness = self._target_loudness(data)
         out = self.tmp / f"fx_{uuid.uuid4().hex[:12]}.wav"
         started = time.time()
         try:
-            process(raw, out, names, self.session.effects, sample_rate)
+            process(
+                raw, out, names, self.session.effects, sample_rate,
+                loudness=loudness, true_peak=float(self.session.config.get("true_peak", -1.5)),
+            )
         except SystemExit as e:
             raise ApiError(str(e.code)) from None
         info = sf.info(str(out))
         return self._clip(
-            out, raw, sample_rate, duration=round(info.duration, 2), elapsed=round(time.time() - started, 2), effects=names
+            out, raw, sample_rate, duration=round(info.duration, 2), elapsed=round(time.time() - started, 2),
+            effects=names, loudness=loudness,
         )
 
     def upload(self, body: bytes, filename: str) -> dict:

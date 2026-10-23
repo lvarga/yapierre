@@ -209,6 +209,7 @@ aside .panel { padding: 16px; position: sticky; top: 16px; max-height: calc(100v
       <div class="row">
         <div class="field"><label for="language">Language</label><select id="language"></select></div>
         <div class="field"><label for="format">Format</label><select id="format"></select></div>
+        <div class="field"><label for="loudness" title="Normalizes every clip to the same perceived loudness (EBU R128)">Loudness</label><select id="loudness"></select></div>
       </div>
 
       <div class="field">
@@ -441,9 +442,21 @@ function renderEffectChips() {
   $$("#effectChips .chip").forEach(b => b.classList.toggle("on", state.effects.has(b.textContent)));
 }
 
+const LOUDNESS_PRESETS = [
+  ["-14", "-14 LUFS (streaming, louder)"],
+  ["-16", "-16 LUFS (online speech)"],
+  ["-19", "-19 LUFS (quieter)"],
+  ["-23", "-23 LUFS (broadcast)"],
+  ["off", "Off (as generated)"],
+];
+function loudnessFields() {
+  const v = $("#loudness").value;
+  return v === "off" ? { normalize: false, loudness: null } : { normalize: true, loudness: Number(v) };
+}
 function formData() {
   const seed = $("#seed").value.trim();
   return {
+    ...loudnessFields(),
     text: $("#text").value,
     language: $("#language").value,
     format: $("#format").value,
@@ -469,6 +482,8 @@ function applyForm(d) {
   if (d.format && [...$("#format").options].some(o => o.value === d.format)) $("#format").value = d.format;
   if (d.speaker && [...$("#speaker").options].some(o => o.value === d.speaker)) $("#speaker").value = d.speaker;
   if (typeof d.auto_effects === "boolean") $("#autoEffects").checked = d.auto_effects;
+  const lv = d.normalize === false ? "off" : (d.loudness != null ? String(d.loudness) : null);
+  if (lv && [...$("#loudness").options].some(o => o.value === lv)) $("#loudness").value = lv;
   state.effects = new Set(d.effects || []);
   renderEffectChips();
   setMode(d.mode === "clone" && !state.refUpload ? "design" : (d.mode || "design"));
@@ -477,7 +492,7 @@ function applyForm(d) {
 function saveForm() { if (state.info) { const d = formData(); delete d.ref_upload; store("form", d); } }
 function updateCount() { const n = $("#text").value.length; $("#charCount").textContent = `${n} character${n === 1 ? "" : "s"}`; }
 ["#text", "#voice", "#style", "#refText", "#filename", "#seed"].forEach(id => $(id).addEventListener("input", () => { updateCount(); saveForm(); }));
-["#language", "#format", "#speaker", "#engine", "#autoEffects"].forEach(id => $(id).addEventListener("change", saveForm));
+["#language", "#format", "#loudness", "#speaker", "#engine", "#autoEffects"].forEach(id => $(id).addEventListener("change", saveForm));
 
 $("#loadTxt").addEventListener("click", () => $("#txtFile").click());
 $("#txtFile").addEventListener("change", async e => {
@@ -503,6 +518,9 @@ function commandArgs(d) {
   if (d.style.trim()) a.push("-s", q(d.style.trim()));
   for (const e of d.effects) a.push("-e", e);
   if (!d.auto_effects) a.push("--no-auto-effects");
+  const dflt = state.info.defaults;
+  if (!d.normalize) { if (dflt.normalize) a.push("--no-normalize"); }
+  else if (!dflt.normalize || d.loudness !== dflt.loudness) a.push("--loudness", d.loudness);
   if (d.seed !== null) a.push("--seed", d.seed);
   if (d.filename) {
     const name = /\.(wav|mp3|ogg|flac)$/i.test(d.filename) ? d.filename : `${d.filename}.${d.format}`;
@@ -563,8 +581,8 @@ function showResult(jobId) {
           active.has(e.name) ? active.delete(e.name) : active.add(e.name);
           c.classList.toggle("on", active.has(e.name));
           try {
-            const clip = await api("/api/effects", { clip_id: job.result.clip_id, effects: [...active] });
-            out.innerHTML = `<div class="meta">${active.size ? esc([...active].join(" + ")) : "no effects"} · ${fmtSecs(clip.duration)}</div>
+            const clip = await api("/api/effects", { clip_id: job.result.clip_id, effects: [...active], ...loudnessFields() });
+            out.innerHTML = `<div class="meta">${active.size ? esc([...active].join(" + ")) : "no effects"} · ${fmtSecs(clip.duration)}${clip.loudness != null ? ` · ${clip.loudness} LUFS` : ""}</div>
               <audio controls autoplay src="${clip.url}"></audio>
               <a class="btn small" href="${clip.url}?download=1" download>Download this version</a>`;
           } catch (err) { out.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
@@ -645,7 +663,7 @@ async function preview(payload, card) {
   }
 }
 function previewPayload(extra) {
-  return { text: $("#pvText").value, language: $("#pvLang").value, engine: $("#engine").value, ...extra };
+  return { text: $("#pvText").value, language: $("#pvLang").value, engine: $("#engine").value, ...loudnessFields(), ...extra };
 }
 function voiceCard(name, desc, onPreview, onUse) {
   const card = document.createElement("div");
@@ -700,7 +718,7 @@ async function runEffects(names, label) {
   showError($("#fxError"), "");
   if (!state.fxSource) { showError($("#fxError"), "Pick a source clip first: make a sample, or click “Try effects” on a clip in the history."); return; }
   try {
-    const clip = await api("/api/effects", { clip_id: state.fxSource.clip_id, effects: names });
+    const clip = await api("/api/effects", { clip_id: state.fxSource.clip_id, effects: names, ...loudnessFields() });
     $("#fxOut").hidden = false;
     $("#fxOutName").textContent = label;
     $("#fxOutPlayer").src = clip.url; $("#fxOutPlayer").play().catch(() => {});
@@ -731,7 +749,7 @@ $("#fxSample").addEventListener("click", async () => {
   const btn = $("#fxSample"); btn.disabled = true;
   $("#fxSourceName").innerHTML = `<span class="spinner"></span> generating a sample…`;
   try {
-    const job = await api("/api/preview", { mode: "design", text: "This is a sample clip for trying out different effects.", language: "english" });
+    const job = await api("/api/preview", { mode: "design", text: "This is a sample clip for trying out different effects.", language: "english", ...loudnessFields() });
     addJobs([job]);
     const finish = j => {
       if (j.status === "done") { setFxSource(j.result, "Sample clip"); btn.disabled = false; state.watch.delete(j.id); }
@@ -776,7 +794,7 @@ function jobCard(job, opts = {}) {
   else if (job.status === "running") body = `<div class="log"><span class="spinner"></span> ${esc(job.log.at(-1) || "starting…")}</div>`;
   else if (job.status === "error") body = `<div class="err">${esc(job.error)}</div>`;
   else if (r) {
-    const fx = r.effects?.length ? ` · ${esc(r.effects.join(" + "))}` : "";
+    const fx = (r.effects?.length ? ` · ${esc(r.effects.join(" + "))}` : "") + (r.loudness != null ? ` · ${r.loudness} LUFS` : "");
     const timing = r.cached ? " · saved preview" : (r.elapsed != null ? ` · made in ${fmtSecs(r.elapsed)}` : "");
     body = `<div class="meta">${kind}${fmtSecs(r.duration)}${fx}${timing}</div>
       <audio controls preload="none" ${opts.autoplay ? "autoplay" : ""} src="${r.url}"></audio>
@@ -852,6 +870,11 @@ async function init() {
   fill("#format", info.formats, f => f.toUpperCase());
   fill("#speaker", info.speakers, s => cap(s.replace(/_/g, " ")));
   fill("#engine", info.engines.map(e => e.name));
+  const presets = [...LOUDNESS_PRESETS];
+  const dl = String(info.defaults.loudness);
+  if (!presets.some(([v]) => v === dl)) presets.unshift([dl, `${dl} LUFS (your config)`]);
+  $("#loudness").innerHTML = presets.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+  $("#loudness").value = info.defaults.normalize ? dl : "off";
   $("#language").value = info.defaults.language;
   $("#pvLang").value = "auto";
   $("#format").value = info.defaults.format;

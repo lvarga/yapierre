@@ -17,12 +17,13 @@ yapierre "I am your new overlord. Resistance is futile." --style "make it sound 
 - **Pluggable engines**: ships with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS); more engines can be added
 - **Batch and interactive modes** that load the model once for many jobs
 - **Web interface** with voice previews, live effect previews, microphone recording for cloning, and a batch editor
+- **Loudness normalization** (EBU R128) so every clip plays at the same volume, -16 LUFS by default
 - Output to WAV, MP3, OGG or FLAC; reads text from arguments, files or stdin; handles long texts
 
 ## Requirements
 
 - Python 3.11 or 3.12
-- [ffmpeg](https://ffmpeg.org/download.html) on your `PATH` (for effects, MP3/OGG output and `--play`)
+- [ffmpeg](https://ffmpeg.org/download.html) on your `PATH` (for effects, loudness normalization, MP3/OGG output and `--play`)
 - An NVIDIA GPU with **6 GB+ VRAM** is strongly recommended (the default model uses about 4.5 GB).
   CPU and Apple Silicon (`mps`) work too, just much slower.
 - About 4 GB of disk space per model; models download automatically on first use
@@ -80,6 +81,10 @@ yapierre "Anything you want" --ref-audio me.wav --ref-text "What I said in me.wa
 yapierre "Houston, we have a problem." -e radio
 yapierre "Fee-fi-fo-fum" -e giant -e cave
 
+# Loudness: clips are normalized to -16 LUFS unless you say otherwise
+yapierre "Breaking news!" --loudness -23        # broadcast level
+yapierre "Breaking news!" --no-normalize        # keep the level the model produced
+
 # Long text from a file or a pipe
 yapierre -f chapter1.txt -o chapter1.mp3
 cat notes.txt | yapierre - -o notes.wav
@@ -111,6 +116,22 @@ produces human voices. Turn that off with `--no-auto-effects` or `auto_effects =
 | `giant` | Very deep, monstrous voice |
 | `alien` | Warbling sci-fi alien |
 | `underwater` | Muffled and wobbly |
+
+### Loudness
+
+Every clip is normalized to the same perceived loudness after effects are applied, so a whisper,
+a robot and a shouting voice all play at a similar volume. yapierre measures the clip (EBU R128),
+applies the exact gain needed, and uses a peak limiter so nothing goes over -1.5 dBTP.
+
+| Target | Typical use |
+|---|---|
+| `-14` LUFS | Streaming platforms, louder |
+| `-16` LUFS | Online speech and podcasts (default) |
+| `-23` LUFS | Broadcast (EBU R128) |
+
+Set the target with `--loudness`, turn normalization off with `--no-normalize`, or change the defaults
+with `normalize`, `loudness` and `true_peak` in the config. Normalization needs ffmpeg; without it,
+clips keep their original level.
 
 ### Many jobs at once: batch and interactive mode
 
@@ -161,7 +182,7 @@ yapierre --serve
 This starts a local server at <http://127.0.0.1:8765> and opens it in your browser. Models stay loaded
 while it runs, and everything the command line can do is available on four tabs:
 
-- **Speak**: text (typed or loaded from a .txt file), language, output format and voice, which can be
+- **Speak**: text (typed or loaded from a .txt file), language, output format, loudness and voice, which can be
   described, a preset speaker, or cloned from an uploaded file or a microphone recording. Also style,
   effects, seed and file name. Once a clip is ready, click effect names under it to hear variations
   instantly without regenerating. **Copy as command** gives the equivalent `yapierre` command, and
@@ -192,6 +213,7 @@ flags override everything. See [yapierre.example.toml](yapierre.example.toml) fo
 ```toml
 language = "auto"
 output_format = "mp3"
+loudness = -16.0               # LUFS; normalize = false keeps the generated level
 cache_dir = "D:/models"        # where models are downloaded (default: ~/.cache/huggingface)
 device = "auto"                # auto, cuda, cpu, mps
 

@@ -24,6 +24,10 @@ DEFAULTS: dict[str, Any] = {
     "device": "auto",
     # Apply effects automatically when the style mentions them ("sound like a robot" -> robot).
     "auto_effects": True,
+    # Normalize every clip to this integrated loudness (LUFS, EBU R128). Needs ffmpeg.
+    "normalize": True,
+    "loudness": -16.0,
+    "true_peak": -1.5,
     # Long texts are split into chunks of roughly this many characters.
     "max_chunk_chars": 400,
     "engines": {
@@ -56,6 +60,9 @@ output_format = "wav"      # wav, mp3, ogg, flac (anything ffmpeg can write)
 cache_dir = ""             # where models are downloaded; empty = Hugging Face default
 device = "auto"            # auto, cuda, cuda:0, cpu, mps
 auto_effects = true        # "sound like a robot" in --style also applies the robot effect
+normalize = true           # normalize the loudness of every clip (needs ffmpeg)
+loudness = -16.0           # target in LUFS: -16 online speech/podcasts, -14 streaming, -23 broadcast
+true_peak = -1.5           # peak ceiling in dBTP
 max_chunk_chars = 400
 
 [engines.qwen]
