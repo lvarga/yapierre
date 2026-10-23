@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yapierre</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e8643c'/%3E%3Cpath d='M9 12v8M13 9v14M17 12v8M21 14v4M25 12v8' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #f6f4f1;
+  --panel: #ffffff;
+  --panel-2: #f1eeea;
+  --text: #1f1d1a;
+  --muted: #6d6860;
+  --border: #e2ddd6;
+  --accent: #d9542b;
+  --accent-ink: #ffffff;
+  --accent-soft: #fbe6dd;
+  --ok: #2f7d4f;
+  --err: #b3261e;
+  --err-soft: #fbe9e7;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.04);
+  --radius: 12px;
+  --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161514;
+    --panel: #201f1d;
+    --panel-2: #2a2826;
+    --text: #efebe6;
+    --muted: #a39d94;
+    --border: #3a3734;
+    --accent: #f07a50;
+    --accent-ink: #1a0f0a;
+    --accent-soft: #3b2219;
+    --ok: #6cc28f;
+    --err: #ff8a80;
+    --err-soft: #3a1d1a;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+h2 { font-size: 15px; margin: 0 0 12px; }
+h3 { font-size: 14px; margin: 24px 0 8px; }
+p { margin: 0 0 12px; }
+.hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+kbd { font: 11px var(--mono); padding: 1px 5px; border-radius: 4px; background: rgb(0 0 0 / 0.15); margin-left: 6px; }
+
+header {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--panel);
+}
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; letter-spacing: -0.01em; }
+.logo svg { width: 28px; height: 28px; }
+.status { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.busy .dot { background: var(--accent); animation: pulse 1s infinite; }
+.pill.idle .dot { background: var(--ok); }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+main {
+  display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px;
+  max-width: 1280px; margin: 0 auto; padding: 20px 24px 48px;
+}
+@media (max-width: 960px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 12px 16px; } }
+
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.tabs { display: flex; gap: 2px; padding: 6px 6px 0; border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tabs button {
+  border: 0; background: none; padding: 10px 16px; cursor: pointer; color: var(--muted); font-weight: 600;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+}
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.tab { padding: 20px; }
+.tab[hidden] { display: none; }
+
+.field { margin-bottom: 18px; min-width: 0; }
+.field > label, .label-row label, .label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.label-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.label-row label { margin: 0; }
+.label-row .spacer { flex: 1; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.row > .field { flex: 1 1 160px; }
+input[type=text], input[type=number], input:not([type]), select, textarea {
+  width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
+  outline: none; transition: border-color .15s, box-shadow .15s;
+}
+textarea { resize: vertical; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.mono { font-family: var(--mono); font-size: 13px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel); font-weight: 600; font-size: 14px; white-space: nowrap;
+  color: inherit; text-decoration: none;
+}
+.btn:hover { background: var(--panel-2); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted); }
+.btn.ghost:hover { color: var(--text); background: var(--panel-2); }
+.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; font-weight: 600; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.seg { display: inline-flex; padding: 3px; border-radius: 9px; background: var(--panel-2); gap: 2px; flex-wrap: wrap; margin-bottom: 10px; }
+.seg button { border: 0; background: none; padding: 6px 12px; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); }
+.seg button.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  border: 1px solid var(--border); background: var(--panel); border-radius: 999px; padding: 3px 11px;
+  font-size: 13px; cursor: pointer; color: var(--muted);
+}
+.chip:hover { color: var(--text); border-color: var(--muted); }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.chip.static { cursor: default; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 10px; font-weight: 400; }
+details > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+
+.error { background: var(--err-soft); color: var(--err); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-top: 12px; white-space: pre-wrap; }
+.error[hidden] { display: none; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--panel); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card .name { font-weight: 600; }
+.card .desc { color: var(--muted); font-size: 13px; flex: 1; }
+.card audio { width: 100%; height: 36px; }
+.card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+
+.job { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.job + .job { margin-top: 8px; }
+.job.current { border-color: var(--accent); }
+.job .top { display: flex; gap: 8px; align-items: baseline; }
+.job .title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.job .meta { font-size: 12px; color: var(--muted); }
+.job .log { font: 12px var(--mono); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.job audio { width: 100%; height: 36px; }
+.job .err { color: var(--err); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.badge { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--panel-2); color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.badge.running { background: var(--accent-soft); color: var(--accent); }
+.badge.done { color: var(--ok); }
+.badge.error { background: var(--err-soft); color: var(--err); }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+aside .panel { padding: 16px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+.empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px 8px; }
+#result:empty { display: none; }
+#result { margin-top: 20px; }
+.fxbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fxbar .label { margin: 0 4px 0 0; color: var(--muted); font-weight: 600; font-size: 12px; }
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 8px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10;
+}
+.toast.show { opacity: 1; }
+.rec { color: var(--err); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M9 12v8M13 9v14M17 12v8M21 14v4M25 12v8" stroke="white" stroke-width="2.4" stroke-linecap="round"/></svg>
+    yapierre
+  </div>
+  <span class="hint" id="version"></span>
+  <div class="status">
+    <span class="pill" id="pillDevice" title="Device">…</span>
+    <span class="pill" id="pillModel" title="Model in memory">no model loaded</span>
+    <span class="pill idle" id="pillBusy"><span class="dot"></span><span>Idle</span></span>
+  </div>
+</header>
+
+<main>
+  <div class="panel">
+    <nav class="tabs" id="tabs">
+      <button data-tab="speak" class="on">Speak</button>
+      <button data-tab="voices">Voices</button>
+      <button data-tab="effects">Effects</button>
+      <button data-tab="batch">Batch</button>
+    </nav>
+
+    <!-- SPEAK -->
+    <section class="tab" id="tab-speak">
+      <div class="field">
+        <div class="label-row">
+          <label for="text">Text</label>
+          <span class="hint" id="charCount">0 characters</span>
+          <span class="spacer"></span>
+          <button class="link" id="loadTxt">Load .txt file</button>
+          <input type="file" id="txtFile" accept=".txt,text/plain" hidden>
+        </div>
+        <textarea id="text" rows="5" placeholder="Type what you want to hear…"></textarea>
+      </div>
+
+      <div class="row">
+        <div class="field"><label for="language">Language</label><select id="language"></select></div>
+        <div class="field"><label for="format">Format</label><select id="format"></select></div>
+      </div>
+
+      <div class="field">
+        <span class="label">Voice</span>
+        <div class="seg" id="mode">
+          <button data-mode="design" class="on">Describe a voice</button>
+          <button data-mode="speaker">Preset speaker</button>
+          <button data-mode="clone">Clone a voice</button>
+        </div>
+        <div data-panel="design">
+          <textarea id="voice" rows="2"></textarea>
+          <div class="chips" id="voiceIdeas"></div>
+        </div>
+        <div data-panel="speaker" hidden>
+          <div class="row">
+            <div class="field" style="margin:0"><select id="speaker"></select></div>
+            <button class="btn" id="previewSpeaker">▶ Preview</button>
+          </div>
+          <p class="hint" style="margin-top:8px">Hear them all on the <button class="link" data-goto="voices">Voices</button> tab.</p>
+        </div>
+        <div data-panel="clone" hidden>
+          <div class="actions">
+            <button class="btn" id="uploadRef">Upload recording</button>
+            <input type="file" id="refFile" accept="audio/*,video/*" hidden>
+            <button class="btn" id="recordRef">● Record</button>
+            <span class="hint" id="refStatus">3–10 seconds of clear speech works best.</span>
+          </div>
+          <audio id="refPlayer" controls hidden style="width:100%;margin-top:10px"></audio>
+          <input id="refText" style="margin-top:10px" placeholder="Transcript of the recording (optional, improves quality)">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="style">Style <span class="hint">(how it should be said)</span></label>
+        <input id="style" placeholder="e.g. whispering and scared">
+        <div class="chips" id="styleIdeas"></div>
+        <p class="hint" id="styleNote" hidden style="margin-top:8px">The style is ignored when cloning a voice; effects still apply.</p>
+      </div>
+
+      <div class="field">
+        <span class="label">Effects</span>
+        <div class="chips" id="effectChips"></div>
+        <label class="check"><input type="checkbox" id="autoEffects" checked> Also add effects named in the style (e.g. "sound like a robot" adds robot)</label>
+      </div>
+
+      <details class="field">
+        <summary>More options</summary>
+        <div class="row">
+          <div class="field"><label for="seed">Seed</label><input id="seed" type="number" placeholder="random"></div>
+          <div class="field"><label for="filename">File name</label><input id="filename" placeholder="automatic"></div>
+          <div class="field"><label for="engine">Engine</label><select id="engine"></select></div>
+        </div>
+        <p class="hint" id="outputDir"></p>
+      </details>
+
+      <div class="actions">
+        <button class="btn primary" id="generate">Generate<kbd>Ctrl+Enter</kbd></button>
+        <button class="btn ghost" id="copyCmd" title="Copy the equivalent command line">Copy as command</button>
+        <button class="btn ghost" id="addBatch" title="Append these settings as a line on the Batch tab">Add to batch</button>
+      </div>
+      <div class="error" id="speakError" hidden></div>
+      <div id="result"></div>
+    </section>
+
+    <!-- VOICES -->
+    <section class="tab" id="tab-voices" hidden>
+      <p class="hint">Click ▶ to hear a voice say the sample sentence. Previews are saved, so playing one again is instant. <b>Use</b> switches the Speak tab to that voice.</p>
+      <div class="row">
+        <div class="field" style="flex:3 1 260px"><label for="pvText">Sample sentence</label><input id="pvText" value="Hello! This is what my voice sounds like."></div>
+        <div class="field"><label for="pvLang">Language</label><select id="pvLang"></select></div>
+      </div>
+      <h3>Preset speakers</h3>
+      <div class="grid" id="speakerGrid"></div>
+      <h3>Voice ideas</h3>
+      <p class="hint">Voice design invents a voice from a description. Write your own below, or try one of these.</p>
+      <div class="row" style="margin-bottom:12px">
+        <div class="field" style="flex:3 1 260px;margin:0"><input id="customVoice" placeholder="Describe a voice, e.g. a sleepy wizard with a soft, slow voice"></div>
+        <button class="btn" id="previewCustom">▶ Preview</button>
+      </div>
+      <div class="grid" id="designGrid"></div>
+      <h3>Supported languages</h3>
+      <div class="chips" id="langList"></div>
+    </section>
+
+    <!-- EFFECTS -->
+    <section class="tab" id="tab-effects" hidden>
+      <p class="hint">Effects are applied after the voice is generated, so you can try them on any clip in a moment. Pick a clip from the history (<b>Try effects</b>) or make a sample.</p>
+      <div class="card" style="margin-bottom:16px">
+        <div class="top" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="name">Source clip:</span>
+          <span class="desc" id="fxSourceName" style="flex:1">none yet</span>
+          <button class="btn small" id="fxSample">Make a sample clip</button>
+        </div>
+        <audio id="fxSourcePlayer" controls hidden></audio>
+      </div>
+      <div class="grid" id="effectGrid"></div>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn primary" id="fxCombo" disabled>▶ Preview selected together</button>
+        <span class="hint" id="fxComboNames">Select effects with “Use” to stack them.</span>
+      </div>
+      <div class="card" id="fxOut" hidden style="margin-top:12px">
+        <span class="name" id="fxOutName"></span>
+        <audio id="fxOutPlayer" controls></audio>
+        <div class="actions"><a class="btn small" id="fxOutDownload" download>Download</a></div>
+      </div>
+      <div class="error" id="fxError" hidden></div>
+    </section>
+
+    <!-- BATCH -->
+    <section class="tab" id="tab-batch" hidden>
+      <p class="hint">One job per line, written like the command line without <code>yapierre</code>. Lines starting with <code>#</code> are skipped. Every line is checked first, then all jobs are queued and appear in the history. Use <b>Add to batch</b> on the Speak tab to build lines from the form.</p>
+      <textarea id="batchText" class="mono" rows="14" spellcheck="false"></textarea>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn primary" id="runBatch">Run batch</button>
+        <button class="btn ghost" id="exampleBatch">Insert example</button>
+        <button class="btn ghost" id="loadBatch">Load file</button>
+        <input type="file" id="batchFile" accept=".txt,text/plain" hidden>
+        <button class="btn ghost" id="clearBatch">Clear</button>
+      </div>
+      <div class="error" id="batchError" hidden></div>
+    </section>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <h2>History</h2>
+      <div id="history"><p class="empty">Generated clips will show up here.</p></div>
+    </div>
+  </aside>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const cap = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+
+const VOICE_IDEAS = [
+  "A calm British narrator with a deep voice",
+  "A cheerful young woman who talks fast",
+  "An old pirate with a gravelly voice",
+  "A nervous teenage boy",
+  "A warm grandmother telling a bedtime story",
+  "A dramatic movie trailer announcer",
+  "A bored customer service agent",
+  "An excited little child",
+];
+const STYLE_IDEAS = [
+  "cheerful", "sad", "angry", "whispering", "excited", "slow and calm", "shouting", "sarcastic",
+  "make it sound like a robot", "over a walkie-talkie", "echoing in a huge cave",
+];
+const BATCH_EXAMPLE = `# One job per line. Lines starting with # are skipped.
+"Welcome to the show!" --voice "a charismatic late-night host" -o intro.wav
+"Guten Abend und herzlich willkommen!" -l german -o welcome_de.mp3
+"Resistance is futile." -s "make it sound like a robot"
+"Breaking news: a cat has learned to talk." --speaker Ryan -s "very excited" -e radio
+`;
+
+const state = {
+  info: null,
+  mode: "design",
+  effects: new Set(),
+  refUpload: null,
+  fxSource: null,     // {clip_id, url, name}
+  fxUse: new Set(),
+  jobs: new Map(),    // id -> job json
+  jobEls: new Map(),  // id -> history element
+  watch: new Map(),   // id -> callback(job) when it finishes
+  lastStatus: "",
+};
+
+// ---------- helpers ----------
+async function api(path, body, opts = {}) {
+  const res = await fetch(path, body === undefined ? opts : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), ...opts,
+  });
+  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok) { const err = new Error(data.error || `HTTP ${res.status}`); err.data = data; throw err; }
+  return data;
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function showError(el, msg) { el.textContent = msg || ""; el.hidden = !msg; }
+function store(key, value) { try { localStorage.setItem("yapierre." + key, JSON.stringify(value)); } catch {} }
+function load(key, fallback) { try { const v = localStorage.getItem("yapierre." + key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; } }
+function play(url) { const a = new Audio(url); a.play().catch(() => {}); return a; }
+function fmtSecs(s) { return s == null ? "" : `${Number(s).toFixed(1)}s`; }
+function langLabel(l) { return l === "auto" ? "Auto-detect" : cap(l); }
+
+// ---------- tabs ----------
+function showTab(name) {
+  $$("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  $$(".tab").forEach(s => s.hidden = s.id !== "tab-" + name);
+  store("tab", name);
+}
+$("#tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) showTab(b.dataset.tab); });
+document.addEventListener("click", e => { const g = e.target.closest("[data-goto]"); if (g) showTab(g.dataset.goto); });
+
+// ---------- speak form ----------
+function setMode(mode) {
+  state.mode = mode;
+  $$("#mode button").forEach(b => b.classList.toggle("on", b.dataset.mode === mode));
+  $$("[data-panel]").forEach(p => p.hidden = p.dataset.panel !== mode);
+  $("#styleNote").hidden = mode !== "clone";
+  saveForm();
+}
+$("#mode").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setMode(b.dataset.mode); });
+
+function chipList(container, items, onClick) {
+  container.innerHTML = "";
+  for (const item of items) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = item.label ?? item;
+    if (item.title) b.title = item.title;
+    b.addEventListener("click", () => onClick(item, b));
+    container.append(b);
+  }
+}
+
+function renderEffectChips() {
+  chipList($("#effectChips"), state.info.effects.map(e => ({ label: e.name, title: e.description, name: e.name })), (item, b) => {
+    state.effects.has(item.name) ? state.effects.delete(item.name) : state.effects.add(item.name);
+    b.classList.toggle("on", state.effects.has(item.name));
+    saveForm();
+  });
+  $$("#effectChips .chip").forEach(b => b.classList.toggle("on", state.effects.has(b.textContent)));
+}
+
+function formData() {
+  const seed = $("#seed").value.trim();
+  return {
+    text: $("#text").value,
+    language: $("#language").value,
+    format: $("#format").value,
+    mode: state.mode,
+    voice: $("#voice").value,
+    speaker: $("#speaker").value,
+    ref_upload: state.refUpload?.upload_id || null,
+    ref_text: $("#refText").value,
+    style: $("#style").value,
+    effects: [...state.effects],
+    auto_effects: $("#autoEffects").checked,
+    seed: seed === "" ? null : Number(seed),
+    filename: $("#filename").value.trim(),
+    engine: $("#engine").value,
+  };
+}
+function applyForm(d) {
+  if (!d) return;
+  const set = (id, v) => { if (v !== undefined && v !== null) $(id).value = v; };
+  set("#text", d.text); set("#voice", d.voice); set("#style", d.style); set("#refText", d.ref_text);
+  set("#filename", d.filename); set("#seed", d.seed ?? "");
+  if (d.language && [...$("#language").options].some(o => o.value === d.language)) $("#language").value = d.language;
+  if (d.format && [...$("#format").options].some(o => o.value === d.format)) $("#format").value = d.format;
+  if (d.speaker && [...$("#speaker").options].some(o => o.value === d.speaker)) $("#speaker").value = d.speaker;
+  if (typeof d.auto_effects === "boolean") $("#autoEffects").checked = d.auto_effects;
+  state.effects = new Set(d.effects || []);
+  renderEffectChips();
+  setMode(d.mode === "clone" && !state.refUpload ? "design" : (d.mode || "design"));
+  updateCount();
+}
+function saveForm() { if (state.info) { const d = formData(); delete d.ref_upload; store("form", d); } }
+function updateCount() { const n = $("#text").value.length; $("#charCount").textContent = `${n} character${n === 1 ? "" : "s"}`; }
+["#text", "#voice", "#style", "#refText", "#filename", "#seed"].forEach(id => $(id).addEventListener("input", () => { updateCount(); saveForm(); }));
+["#language", "#format", "#speaker", "#engine", "#autoEffects"].forEach(id => $(id).addEventListener("change", saveForm));
+
+$("#loadTxt").addEventListener("click", () => $("#txtFile").click());
+$("#txtFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $("#text").value = await f.text(); updateCount(); saveForm(); e.target.value = "";
+});
+
+// ---------- command line equivalent ----------
+function q(s) {
+  s = String(s);
+  if (!s.includes('"')) return `"${s}"`;
+  if (!s.includes("'")) return `'${s}'`;
+  return `"${s.replace(/"/g, "”")}"`;
+}
+function commandArgs(d) {
+  const a = [q(d.text.trim().replace(/\s+/g, " ") || "…")];
+  if (d.language && d.language !== state.info.defaults.language) a.push("-l", d.language);
+  if (d.mode === "speaker") a.push("--speaker", d.speaker);
+  else if (d.mode === "clone") {
+    a.push("--ref-audio", q(state.refUpload?.path || "reference.wav"));
+    if (d.ref_text.trim()) a.push("--ref-text", q(d.ref_text.trim()));
+  } else if (d.voice.trim()) a.push("--voice", q(d.voice.trim()));
+  if (d.style.trim()) a.push("-s", q(d.style.trim()));
+  for (const e of d.effects) a.push("-e", e);
+  if (!d.auto_effects) a.push("--no-auto-effects");
+  if (d.seed !== null) a.push("--seed", d.seed);
+  if (d.filename) {
+    const name = /\.(wav|mp3|ogg|flac)$/i.test(d.filename) ? d.filename : `${d.filename}.${d.format}`;
+    a.push("-o", q(name));
+  }
+  if (d.engine && d.engine !== state.info.engine) a.push("--engine", d.engine);
+  return a.join(" ");
+}
+$("#copyCmd").addEventListener("click", async () => {
+  const cmd = "yapierre " + commandArgs(formData());
+  try { await navigator.clipboard.writeText(cmd); toast("Command copied"); } catch { prompt("Copy this command:", cmd); }
+});
+$("#addBatch").addEventListener("click", () => {
+  const ta = $("#batchText");
+  ta.value = (ta.value.trimEnd() ? ta.value.trimEnd() + "\n" : "") + commandArgs(formData()) + "\n";
+  store("batch", ta.value);
+  toast("Added to the Batch tab");
+});
+
+// ---------- generate ----------
+async function generate() {
+  showError($("#speakError"), "");
+  const d = formData();
+  if (!d.text.trim()) { showError($("#speakError"), "Type some text first."); $("#text").focus(); return; }
+  const btn = $("#generate"); btn.disabled = true;
+  try {
+    const job = await api("/api/speak", d);
+    addJobs([job]);
+    showResult(job.id);
+  } catch (err) {
+    showError($("#speakError"), err.message);
+  } finally { btn.disabled = false; }
+}
+$("#generate").addEventListener("click", generate);
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter" && !$("#tab-speak").hidden) { e.preventDefault(); generate(); }
+});
+
+// The card under the form shows the latest Speak job, with quick effect previews once it's done.
+function showResult(jobId) {
+  const box = $("#result");
+  box.dataset.job = jobId;
+  const render = () => {
+    const job = state.jobs.get(jobId);
+    if (!job || box.dataset.job !== jobId) return;
+    box.innerHTML = "";
+    const card = jobCard(job, { autoplay: true });
+    if (job.status === "done") {
+      const bar = document.createElement("div");
+      bar.className = "fxbar";
+      bar.innerHTML = `<span class="label">Try effects:</span>`;
+      const out = document.createElement("div");
+      const active = new Set(job.result.effects || []);
+      for (const e of state.info.effects) {
+        const c = document.createElement("button");
+        c.className = "chip" + (active.has(e.name) ? " on" : ""); c.textContent = e.name; c.title = e.description;
+        c.addEventListener("click", async () => {
+          active.has(e.name) ? active.delete(e.name) : active.add(e.name);
+          c.classList.toggle("on", active.has(e.name));
+          try {
+            const clip = await api("/api/effects", { clip_id: job.result.clip_id, effects: [...active] });
+            out.innerHTML = `<div class="meta">${active.size ? esc([...active].join(" + ")) : "no effects"} · ${fmtSecs(clip.duration)}</div>
+              <audio controls autoplay src="${clip.url}"></audio>
+              <a class="btn small" href="${clip.url}?download=1" download>Download this version</a>`;
+          } catch (err) { out.innerHTML = `<div class="err">${esc(err.message)}</div>`; }
+        });
+        bar.append(c);
+      }
+      card.append(bar, out);
+    }
+    box.append(card);
+  };
+  state.watch.set(jobId, render);
+  render();
+}
+
+// ---------- reference voice (clone) ----------
+async function uploadRef(blob, name) {
+  $("#refStatus").textContent = "Uploading…";
+  try {
+    const res = await fetch("/api/upload", { method: "POST", headers: { "X-Filename": encodeURIComponent(name) }, body: blob });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    state.refUpload = data;
+    $("#refPlayer").src = data.url; $("#refPlayer").hidden = false;
+    $("#refStatus").textContent = `${name} · ${fmtSecs(data.duration)}` + (data.duration > 20 ? " (long clips work best trimmed to ~10s)" : "");
+  } catch (err) {
+    state.refUpload = null;
+    $("#refStatus").textContent = "Upload failed: " + err.message;
+  }
+}
+$("#uploadRef").addEventListener("click", () => $("#refFile").click());
+$("#refFile").addEventListener("change", e => { const f = e.target.files[0]; if (f) uploadRef(f, f.name); e.target.value = ""; });
+
+let recorder = null;
+$("#recordRef").addEventListener("click", async () => {
+  const btn = $("#recordRef");
+  if (recorder) { recorder.stop(); return; }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (err) { $("#refStatus").textContent = "Microphone not available: " + err.message; return; }
+  const chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = e => chunks.push(e.data);
+  const started = Date.now();
+  const timer = setInterval(() => { $("#refStatus").textContent = `Recording… ${((Date.now() - started) / 1000).toFixed(0)}s (click Stop when done)`; }, 250);
+  recorder.onstop = () => {
+    clearInterval(timer);
+    stream.getTracks().forEach(t => t.stop());
+    btn.textContent = "● Record"; btn.classList.remove("rec");
+    const type = recorder.mimeType || "audio/webm";
+    recorder = null;
+    uploadRef(new Blob(chunks, { type }), type.includes("ogg") ? "recording.ogg" : "recording.webm");
+  };
+  recorder.start();
+  btn.textContent = "■ Stop"; btn.classList.add("rec");
+});
+
+// ---------- voices tab ----------
+async function preview(payload, card) {
+  const btn = $(".pv", card);
+  const slot = $(".slot", card);
+  btn.disabled = true;
+  slot.innerHTML = `<span class="hint"><span class="spinner"></span> generating…</span>`;
+  try {
+    const job = await api("/api/preview", payload);
+    addJobs([job]);
+    const finish = j => {
+      btn.disabled = false;
+      if (j.status === "done") { slot.innerHTML = `<audio controls autoplay src="${j.result.url}"></audio>`; }
+      else if (j.status === "error") slot.innerHTML = `<div class="err">${esc(j.error)}</div>`;
+      else { slot.innerHTML = `<span class="hint"><span class="spinner"></span> ${esc(j.status === "queued" ? "waiting in queue…" : (j.log.at(-1) || "generating…"))}</span>`; return; }
+      state.watch.delete(j.id);
+    };
+    state.watch.set(job.id, finish);
+    finish(job);
+  } catch (err) {
+    btn.disabled = false;
+    slot.innerHTML = `<div class="err">${esc(err.message)}</div>`;
+  }
+}
+function previewPayload(extra) {
+  return { text: $("#pvText").value, language: $("#pvLang").value, engine: $("#engine").value, ...extra };
+}
+function voiceCard(name, desc, onPreview, onUse) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `<div class="name">${esc(name)}</div>${desc ? `<div class="desc">${esc(desc)}</div>` : ""}
+    <div class="actions"><button class="btn small pv">▶ Preview</button><button class="btn small ghost use">Use</button></div>
+    <div class="slot"></div>`;
+  $(".pv", card).addEventListener("click", () => onPreview(card));
+  $(".use", card).addEventListener("click", () => { onUse(); showTab("speak"); toast(`Using ${name}`); });
+  return card;
+}
+function renderVoices() {
+  const grid = $("#speakerGrid"); grid.innerHTML = "";
+  for (const s of state.info.speakers) {
+    grid.append(voiceCard(cap(s.replace(/_/g, " ")), "", card => preview(previewPayload({ mode: "speaker", speaker: s }), card),
+      () => { $("#speaker").value = s; setMode("speaker"); }));
+  }
+  if (!state.info.speakers.length) grid.innerHTML = `<p class="hint">This engine has no preset speakers.</p>`;
+  const dg = $("#designGrid"); dg.innerHTML = "";
+  for (const v of VOICE_IDEAS) {
+    dg.append(voiceCard(v, "", card => preview(previewPayload({ mode: "design", voice: v }), card),
+      () => { $("#voice").value = v; setMode("design"); }));
+  }
+  const langs = $("#langList"); langs.innerHTML = "";
+  for (const l of state.info.languages.filter(l => l !== "auto")) {
+    const c = document.createElement("span"); c.className = "chip static"; c.textContent = cap(l); langs.append(c);
+  }
+}
+$("#previewCustom").addEventListener("click", () => {
+  const v = $("#customVoice").value.trim();
+  if (!v) { $("#customVoice").focus(); return; }
+  const card = voiceCard(v, "Your description", c => preview(previewPayload({ mode: "design", voice: v }), c),
+    () => { $("#voice").value = v; setMode("design"); });
+  $("#designGrid").prepend(card);
+  preview(previewPayload({ mode: "design", voice: v }), card);
+});
+$("#previewSpeaker").addEventListener("click", () => {
+  const s = $("#speaker").value;
+  const card = $(`#speakerGrid .card:nth-child(${state.info.speakers.indexOf(s) + 1})`);
+  showTab("voices");
+  if (card) { card.scrollIntoView({ block: "center", behavior: "smooth" }); preview(previewPayload({ mode: "speaker", speaker: s }), card); }
+});
+
+// ---------- effects tab ----------
+function setFxSource(clip, name) {
+  state.fxSource = clip ? { ...clip, name } : null;
+  $("#fxSourceName").textContent = clip ? name : "none yet";
+  const p = $("#fxSourcePlayer"); p.hidden = !clip; if (clip) p.src = clip.url;
+  $("#fxCombo").disabled = !clip || !state.fxUse.size;
+}
+async function runEffects(names, label) {
+  showError($("#fxError"), "");
+  if (!state.fxSource) { showError($("#fxError"), "Pick a source clip first: make a sample, or click “Try effects” on a clip in the history."); return; }
+  try {
+    const clip = await api("/api/effects", { clip_id: state.fxSource.clip_id, effects: names });
+    $("#fxOut").hidden = false;
+    $("#fxOutName").textContent = label;
+    $("#fxOutPlayer").src = clip.url; $("#fxOutPlayer").play().catch(() => {});
+    $("#fxOutDownload").href = clip.url + "?download=1";
+  } catch (err) { showError($("#fxError"), err.message); }
+}
+function renderEffectGrid() {
+  const grid = $("#effectGrid"); grid.innerHTML = "";
+  for (const e of state.info.effects) {
+    const card = document.createElement("div");
+    card.className = "card" + (state.fxUse.has(e.name) ? " selected" : "");
+    card.innerHTML = `<div class="name">${esc(e.name)}</div><div class="desc">${esc(e.description)}${e.keywords.length ? `<br><span class="hint">Auto from style: ${esc(e.keywords.join(", "))}</span>` : ""}</div>
+      <div class="actions"><button class="btn small pv">▶ Preview</button><button class="btn small ghost use">${state.fxUse.has(e.name) ? "✓ Used" : "Use"}</button></div>`;
+    $(".pv", card).addEventListener("click", () => runEffects([e.name], e.name));
+    $(".use", card).addEventListener("click", () => {
+      state.fxUse.has(e.name) ? state.fxUse.delete(e.name) : state.fxUse.add(e.name);
+      // Keep the Speak tab's effect selection in sync.
+      state.effects = new Set(state.fxUse); renderEffectChips(); saveForm();
+      renderEffectGrid();
+    });
+    grid.append(card);
+  }
+  $("#fxCombo").disabled = !state.fxSource || !state.fxUse.size;
+  $("#fxComboNames").textContent = state.fxUse.size ? [...state.fxUse].join(" + ") : "Select effects with “Use” to stack them.";
+}
+$("#fxCombo").addEventListener("click", () => runEffects([...state.fxUse], [...state.fxUse].join(" + ")));
+$("#fxSample").addEventListener("click", async () => {
+  const btn = $("#fxSample"); btn.disabled = true;
+  $("#fxSourceName").innerHTML = `<span class="spinner"></span> generating a sample…`;
+  try {
+    const job = await api("/api/preview", { mode: "design", text: "This is a sample clip for trying out different effects.", language: "english" });
+    addJobs([job]);
+    const finish = j => {
+      if (j.status === "done") { setFxSource(j.result, "Sample clip"); btn.disabled = false; state.watch.delete(j.id); }
+      else if (j.status === "error") { showError($("#fxError"), j.error); setFxSource(null); btn.disabled = false; state.watch.delete(j.id); }
+    };
+    state.watch.set(job.id, finish); finish(job);
+  } catch (err) { showError($("#fxError"), err.message); setFxSource(null); btn.disabled = false; }
+});
+// Keep the Effects tab's "Use" selection in sync when chips change on the Speak tab.
+$("#effectChips").addEventListener("click", () => { state.fxUse = new Set(state.effects); renderEffectGrid(); });
+
+// ---------- batch tab ----------
+$("#batchText").addEventListener("input", () => store("batch", $("#batchText").value));
+$("#exampleBatch").addEventListener("click", () => { $("#batchText").value = BATCH_EXAMPLE; store("batch", BATCH_EXAMPLE); });
+$("#clearBatch").addEventListener("click", () => { $("#batchText").value = ""; store("batch", ""); showError($("#batchError"), ""); });
+$("#loadBatch").addEventListener("click", () => $("#batchFile").click());
+$("#batchFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $("#batchText").value = await f.text(); store("batch", $("#batchText").value); e.target.value = "";
+});
+$("#runBatch").addEventListener("click", async () => {
+  showError($("#batchError"), "");
+  const btn = $("#runBatch"); btn.disabled = true;
+  try {
+    const res = await api("/api/batch", { text: $("#batchText").value });
+    addJobs(res.jobs);
+    toast(`${res.jobs.length} job${res.jobs.length === 1 ? "" : "s"} queued`);
+  } catch (err) {
+    const lines = (err.data?.errors || []).map(e => `Line ${e.line}: ${e.message}`).join("\n");
+    showError($("#batchError"), err.message + (lines ? "\n\n" + lines : ""));
+  } finally { btn.disabled = false; }
+});
+
+// ---------- history ----------
+function jobCard(job, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "job" + (job.status === "running" ? " current" : "");
+  const r = job.result;
+  const kind = { speak: "", preview: "", batch: "batch · " }[job.kind] ?? "";
+  let body = "";
+  if (job.status === "queued") body = `<div class="log">Waiting in queue…</div>`;
+  else if (job.status === "running") body = `<div class="log"><span class="spinner"></span> ${esc(job.log.at(-1) || "starting…")}</div>`;
+  else if (job.status === "error") body = `<div class="err">${esc(job.error)}</div>`;
+  else if (r) {
+    const fx = r.effects?.length ? ` · ${esc(r.effects.join(" + "))}` : "";
+    const timing = r.cached ? " · saved preview" : (r.elapsed != null ? ` · made in ${fmtSecs(r.elapsed)}` : "");
+    body = `<div class="meta">${kind}${fmtSecs(r.duration)}${fx}${timing}</div>
+      <audio controls preload="none" ${opts.autoplay ? "autoplay" : ""} src="${r.url}"></audio>
+      <div class="actions">
+        <a class="btn small" href="${r.url}?download=1" download>Download</a>
+        <button class="btn small ghost" data-act="fx">Try effects</button>
+        ${job.kind === "speak" ? `<button class="btn small ghost" data-act="reuse">Reuse settings</button>` : ""}
+        <button class="btn small ghost" data-act="path" title="${esc(r.path)}">Copy path</button>
+      </div>`;
+  }
+  el.innerHTML = `<div class="top"><span class="title" title="${esc(job.text)}">${esc(job.kind === "speak" ? job.text : job.label)}</span>
+    <span class="badge ${job.status}">${job.status}</span></div>${body}`;
+  el.addEventListener("click", async e => {
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (act === "fx") { setFxSource(r, job.kind === "speak" ? job.text.slice(0, 60) : job.label); showTab("effects"); }
+    if (act === "reuse") { applyForm(job.settings); showTab("speak"); toast("Settings loaded"); }
+    if (act === "path") { try { await navigator.clipboard.writeText(r.path); toast("Path copied"); } catch { prompt("File path:", r.path); } }
+  });
+  return el;
+}
+function renderJob(job) {
+  const list = $("#history");
+  $(".empty", list)?.remove();
+  const old = state.jobEls.get(job.id);
+  const el = jobCard(job);
+  if (old) old.replaceWith(el); else list.prepend(el);
+  state.jobEls.set(job.id, el);
+}
+function addJobs(jobs) {
+  for (const job of jobs) {
+    const prev = state.jobs.get(job.id);
+    const changed = !prev || prev.status !== job.status || prev.log.at(-1) !== job.log.at(-1);
+    state.jobs.set(job.id, job);
+    if (changed) {
+      renderJob(job);
+      state.watch.get(job.id)?.(job);
+    }
+  }
+}
+async function pollJobs() {
+  const pending = [...state.jobs.values()].some(j => j.status === "queued" || j.status === "running");
+  if (pending) {
+    try { addJobs(await api("/api/jobs")); } catch {}
+  }
+  setTimeout(pollJobs, pending ? 700 : 1500);
+}
+
+// ---------- status ----------
+async function pollStatus() {
+  try {
+    const s = await api("/api/status");
+    $("#pillDevice").textContent = s.device;
+    $("#pillModel").textContent = s.loaded_models.length ? s.loaded_models.map(m => m.split("/").pop()).join(", ") : "no model loaded";
+    const busy = $("#pillBusy");
+    busy.className = "pill " + (s.busy ? "busy" : "idle");
+    busy.lastChild.textContent = s.busy ? `Working${s.queued ? ` · ${s.queued} queued` : ""}` : "Idle";
+  } catch {
+    $("#pillBusy").className = "pill"; $("#pillBusy").lastChild.textContent = "Server not reachable";
+  }
+  setTimeout(pollStatus, 2000);
+}
+
+// ---------- start ----------
+async function init() {
+  let info;
+  try { info = await api("/api/info"); }
+  catch (err) { document.body.innerHTML = `<p class="error" style="margin:24px">Couldn't reach the yapierre server: ${esc(err.message)}</p>`; return; }
+  state.info = info;
+  $("#version").textContent = "v" + info.version;
+  const fill = (sel, items, label = x => x) => { $(sel).innerHTML = items.map(i => `<option value="${esc(i)}">${esc(label(i))}</option>`).join(""); };
+  fill("#language", info.languages, langLabel);
+  fill("#pvLang", info.languages, langLabel);
+  fill("#format", info.formats, f => f.toUpperCase());
+  fill("#speaker", info.speakers, s => cap(s.replace(/_/g, " ")));
+  fill("#engine", info.engines.map(e => e.name));
+  $("#language").value = info.defaults.language;
+  $("#pvLang").value = "auto";
+  $("#format").value = info.defaults.format;
+  $("#engine").value = info.engine;
+  $("#autoEffects").checked = info.defaults.auto_effects;
+  $("#voice").placeholder = `Who is speaking? Leave empty for the default: “${info.defaults.voice}”`;
+  $("#outputDir").textContent = `Clips are saved in ${info.defaults.output_dir}`;
+  chipList($("#voiceIdeas"), VOICE_IDEAS, v => { $("#voice").value = v; saveForm(); });
+  chipList($("#styleIdeas"), STYLE_IDEAS, s => { $("#style").value = s; saveForm(); });
+  renderEffectChips();
+  renderVoices();
+  renderEffectGrid();
+  if (!info.ffmpeg) showError($("#speakError"), "ffmpeg wasn't found, so effects and MP3/OGG output won't work. Install it from ffmpeg.org.");
+
+  applyForm(load("form", null));
+  state.fxUse = new Set(state.effects); renderEffectGrid();
+  $("#batchText").value = load("batch", "") || BATCH_EXAMPLE;
+  showTab(load("tab", "speak"));
+
+  try { addJobs(await api("/api/jobs")); } catch {}
+  pollJobs();
+  pollStatus();
+}
+init();
+</script>
+</body>
+</html>

@@ -22,3 +22,6 @@ yapierre.toml
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local tooling
+.claude/

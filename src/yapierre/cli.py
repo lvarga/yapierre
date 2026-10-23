@@ -37,10 +37,13 @@ many jobs, models loaded once (each line takes the same options as above):
   yapierre --batch jobs.txt              # run every line of a file
   yapierre --batch jobs.txt -l de -e radio   # options here are defaults for every line
   yapierre --interactive                 # type jobs one at a time
+  yapierre --serve                       # web interface in your browser
 """
 
 # Options that configure the whole run and can't change from one batch line to the next.
-SESSION_OPTIONS = ("batch", "interactive", "init_config", "config", "device", "verbose")
+SESSION_OPTIONS = (
+    "batch", "interactive", "serve", "host", "port", "no_browser", "init_config", "config", "device", "verbose",
+)
 
 
 class _JobParser(argparse.ArgumentParser):
@@ -74,6 +77,10 @@ def build_parser(cls: type[argparse.ArgumentParser] = argparse.ArgumentParser) -
     p.add_argument("--play", action="store_true", help="play the result when done (needs ffplay)")
     p.add_argument("--batch", metavar="FILE", help="run one job per line of FILE ('-' for stdin), loading models once")
     p.add_argument("-i", "--interactive", action="store_true", help="read jobs from the prompt, keeping models loaded")
+    p.add_argument("--serve", action="store_true", help="start the web interface (http://127.0.0.1:8765)")
+    p.add_argument("--host", default="127.0.0.1", help="address for --serve (default: 127.0.0.1, this computer only)")
+    p.add_argument("--port", type=int, default=8765, help="port for --serve (default: 8765)")
+    p.add_argument("--no-browser", action="store_true", help="with --serve, don't open a browser window")
     p.add_argument("--config", help="extra config file to load")
     p.add_argument("--list", choices=["engines", "effects", "languages", "speakers"], help="show options and exit")
     p.add_argument("--init-config", action="store_true", help=f"write a starter config to {user_config_path()}")
@@ -154,6 +161,14 @@ class Job:
     label: str = ""
 
 
+@dataclass
+class RunResult:
+    output: Path
+    duration: float  # seconds of audio
+    elapsed: float  # seconds it took to generate
+    sample_rate: int
+
+
 class Session:
     """Keeps engines (and their loaded models) alive so many jobs can run without reloading."""
 
@@ -171,9 +186,10 @@ class Session:
             self._engines[name] = cls(settings, self.config, verbose=self.verbose)
         return self._engines[name]
 
-    def _default_output(self) -> Path:
+    def default_output(self, fmt: str | None = None) -> Path:
         stamp = time.strftime("%Y%m%d_%H%M%S")
-        base = Path(self.config["output_dir"]) / f"yapierre_{stamp}.{self.config['output_format'].lstrip('.')}"
+        fmt = (fmt or self.config["output_format"]).lstrip(".")
+        base = Path(self.config["output_dir"]) / f"yapierre_{stamp}.{fmt}"
         path, n = base, 2
         while path.exists() or path in self._reserved:
             path = base.with_name(f"{base.stem}_{n}{base.suffix}")
@@ -204,8 +220,13 @@ class Session:
             raise SystemExit(f"yapierre: reference audio not found: {args.ref_audio}")
 
         engine_name = args.engine or self.config["engine"]
+        engine = self.engine(engine_name)
         language = self.config["language"] if args.lang is None else args.lang
-        self.engine(engine_name).resolve_language(language)  # fail fast on unsupported languages
+        engine.resolve_language(language)  # fail fast on unsupported languages
+        if args.speaker and not args.ref_audio:
+            speakers = engine.speakers()
+            if speakers and args.speaker.lower() not in {s.lower() for s in speakers}:
+                raise SystemExit(f"yapierre: unknown speaker '{args.speaker}'. Available: {', '.join(speakers)}")
 
         request = SynthesisRequest(
             text=text,
@@ -216,10 +237,11 @@ class Session:
             ref_audio=args.ref_audio,
             ref_text=args.ref_text,
         )
-        output = Path(args.output) if args.output else self._default_output()
+        output = Path(args.output) if args.output else self.default_output()
         return Job(request, engine_name, chosen, output, args.seed, args.play, label)
 
-    def run(self, job: Job) -> Path:
+    def run(self, job: Job, raw_copy: Path | None = None) -> RunResult:
+        """Generate the job's audio. `raw_copy`, if given, also receives the audio before effects."""
         engine = self.engine(job.engine)
         job.output.parent.mkdir(parents=True, exist_ok=True)
         if job.seed is not None:
@@ -237,6 +259,8 @@ class Session:
             if i < len(chunks):
                 pieces.append(np.zeros(int(sample_rate * 0.25), dtype=np.float32))
         audio = np.concatenate(pieces)
+        if raw_copy:
+            sf.write(raw_copy, audio, sample_rate)
 
         if job.effects or job.output.suffix.lower() not in (".wav", ".flac"):
             with tempfile.TemporaryDirectory() as tmp:
@@ -246,12 +270,12 @@ class Session:
         else:
             sf.write(job.output, audio, sample_rate)
 
-        seconds = len(audio) / sample_rate
+        result = RunResult(job.output, len(audio) / sample_rate, time.time() - started, sample_rate)
         extra = f", effects: {', '.join(job.effects)}" if job.effects else ""
-        print(f"yapierre: saved {job.output} ({seconds:.1f}s of audio in {time.time() - started:.1f}s{extra})")
+        print(f"yapierre: saved {job.output} ({result.duration:.1f}s of audio in {result.elapsed:.1f}s{extra})")
         if job.play:
             play(job.output)
-        return job.output
+        return result
 
 
 def list_options(what: str, session: Session, engine_name: str) -> None:
@@ -285,6 +309,26 @@ def parse_line(parser: argparse.ArgumentParser, line: str, defaults: argparse.Na
     return args
 
 
+def prepare_batch(session: Session, content: str, defaults: argparse.Namespace) -> tuple[list[Job], list[tuple[int, str]]]:
+    """Parse and validate every line of a batch. Returns (jobs sorted by model, [(line number, error)])."""
+    parser = build_parser(_JobParser)
+    jobs, errors = [], []
+    for lineno, line in enumerate(content.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            job_args = parse_line(parser, line, defaults)
+            if job_args.list:
+                raise SystemExit("yapierre: --list can't be used in a batch")
+            jobs.append(session.prepare(job_args, allow_stdin=False, label=f"line {lineno}"))
+        except SystemExit as e:
+            errors.append((lineno, e.code if isinstance(e.code, str) else "invalid line"))
+    # Run jobs that need the same model back to back, so each model loads only once.
+    jobs.sort(key=lambda j: (j.engine, session.engine(j.engine).model_key(j.request)))
+    return jobs, errors
+
+
 def run_batch(args: argparse.Namespace, session: Session) -> int:
     source = args.batch
     try:
@@ -293,28 +337,14 @@ def run_batch(args: argparse.Namespace, session: Session) -> int:
         raise SystemExit(f"yapierre: can't read batch file {source}: {e.strerror}")
 
     # Validate every line before generating anything, so a typo on line 40 doesn't waste a long run.
-    parser = build_parser(_JobParser)
-    jobs, bad = [], 0
-    for lineno, line in enumerate(content.splitlines(), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        try:
-            job_args = parse_line(parser, line, args)
-            if job_args.list:
-                raise SystemExit("yapierre: --list can't be used in a batch file")
-            jobs.append(session.prepare(job_args, allow_stdin=False, label=f"line {lineno}"))
-        except SystemExit as e:
-            print(f"line {lineno}: ", end="", file=sys.stderr)
-            report_exit(e)
-            bad += 1
-    if bad:
-        raise SystemExit(f"yapierre: {bad} invalid line(s) in {source}; nothing was generated.")
+    jobs, errors = prepare_batch(session, content, args)
+    for lineno, message in errors:
+        print(f"line {lineno}: {message}", file=sys.stderr)
+    if errors:
+        raise SystemExit(f"yapierre: {len(errors)} invalid line(s) in {source}; nothing was generated.")
     if not jobs:
         raise SystemExit(f"yapierre: no jobs in {source}")
 
-    # Run jobs that need the same model back to back, so each model loads only once.
-    jobs.sort(key=lambda j: (j.engine, session.engine(j.engine).model_key(j.request)))
     started, failed = time.time(), []
     for i, job in enumerate(jobs, 1):
         print(f"\n[{i}/{len(jobs)}] {job.label}: {job.request.text[:60]!r}")
@@ -410,12 +440,19 @@ def main(argv: list[str] | None = None) -> int:
         list_options(args.list, session, args.engine or config["engine"])
         return 0
 
-    if args.batch or args.interactive:
-        if args.batch and args.interactive:
-            raise SystemExit("yapierre: use either --batch or --interactive, not both")
-        if args.text or args.file or args.output:
-            raise SystemExit("yapierre: give text and -o per line in batch/interactive mode, not on the command line")
-        return run_batch(args, session) if args.batch else run_interactive(args, session)
+    modes = [m for m in ("batch", "interactive", "serve") if getattr(args, m)]
+    if len(modes) > 1:
+        raise SystemExit(f"yapierre: use only one of {', '.join('--' + m for m in modes)}")
+    if modes and (args.text or args.file or args.output):
+        raise SystemExit(f"yapierre: text and -o aren't given on the command line with --{modes[0]}")
+    if args.serve:
+        from .web import serve
+
+        return serve(session, args.host, args.port, open_browser=not args.no_browser)
+    if args.batch:
+        return run_batch(args, session)
+    if args.interactive:
+        return run_interactive(args, session)
 
     session.run(session.prepare(args))
     return 0

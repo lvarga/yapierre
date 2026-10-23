@@ -16,6 +16,7 @@ yapierre "I am your new overlord. Resistance is futile." --style "make it sound 
 - **Audio effects** like robot, radio, telephone, cave, chipmunk, giant, alien and underwater, plus your own ffmpeg filters
 - **Pluggable engines**: ships with [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS); more engines can be added
 - **Batch and interactive modes** that load the model once for many jobs
+- **Web interface** with voice previews, live effect previews, microphone recording for cloning, and a batch editor
 - Output to WAV, MP3, OGG or FLAC; reads text from arguments, files or stdin; handles long texts
 
 ## Requirements
@@ -150,6 +151,31 @@ Quote text that contains `'` or `"`, or that starts with `-`. Options such as `-
 can only be given when starting yapierre. By default only one model is kept in memory, so switching
 between `--voice`, `--speaker` and `--ref-audio` jobs reloads models. With enough VRAM, raise
 `max_loaded_models` in the config (each model needs about 4.5 GB).
+
+## Web interface
+
+```bash
+yapierre --serve
+```
+
+This starts a local server at <http://127.0.0.1:8765> and opens it in your browser. Models stay loaded
+while it runs, and everything the command line can do is available on four tabs:
+
+- **Speak**: text (typed or loaded from a .txt file), language, output format and voice, which can be
+  described, a preset speaker, or cloned from an uploaded file or a microphone recording. Also style,
+  effects, seed and file name. Once a clip is ready, click effect names under it to hear variations
+  instantly without regenerating. **Copy as command** gives the equivalent `yapierre` command, and
+  **Add to batch** turns the form into a batch line.
+- **Voices**: hear every preset speaker and some voice-design ideas say a sample sentence, or describe
+  your own voice. Previews are saved, so replaying one is instant.
+- **Effects**: preview each effect, or a stack of them, on any clip.
+- **Batch**: write or load a batch file, check it and run it.
+
+Generated clips appear in the history panel with players, downloads and their file paths. They are
+saved to `output_dir` like on the command line. The history lasts until the server stops.
+
+Options: `--port 9000`, `--no-browser`, and `--host 0.0.0.0` to allow other devices on your network.
+There is no login, so only do that on a network you trust.
 
 ## Configuration
 

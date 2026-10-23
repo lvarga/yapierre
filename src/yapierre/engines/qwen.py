@@ -68,6 +68,7 @@ class QwenEngine(Engine):
     def __init__(self, settings: dict, common: dict, verbose: bool = False):
         super().__init__(settings, common, verbose)
         self._models: dict[str, object] = {}
+        self._speakers: list[str] | None = None
 
     # --- model loading -------------------------------------------------------------
 
@@ -137,6 +138,9 @@ class QwenEngine(Engine):
 
     # --- Engine API ----------------------------------------------------------------
 
+    def loaded_models(self) -> list[str]:
+        return [self.settings["models"][kind] for kind in self._models]
+
     def model_key(self, request: SynthesisRequest) -> str:
         if request.ref_audio:
             return "clone"
@@ -149,7 +153,9 @@ class QwenEngine(Engine):
         return ["auto"] + sorted(k for k in ids if "dialect" not in k)
 
     def speakers(self) -> list[str]:
-        return sorted(self._config_json("custom")["talker_config"]["spk_id"])
+        if self._speakers is None:
+            self._speakers = sorted(self._config_json("custom")["talker_config"]["spk_id"])
+        return self._speakers
 
     def resolve_language(self, language: str) -> str:
         lang = (language or "auto").strip().lower()

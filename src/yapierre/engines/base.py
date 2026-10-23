@@ -47,6 +47,10 @@ class Engine(ABC):
         """Which model a request needs. Batch mode groups jobs by this to avoid reloading models."""
         return ""
 
+    def loaded_models(self) -> list[str]:
+        """Names of the models currently in memory, for status displays."""
+        return []
+
     def languages(self) -> list[str]:
         return []
 
